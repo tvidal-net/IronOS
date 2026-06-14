@@ -665,7 +665,34 @@ void OLED::drawSpleenChar(const uint16_t c, const bool large) {
   } else {
     return; // glyph not in the table
   }
-  drawArea(cursor_x, cursor_y, width, height, table + (index * (width * (height / 8))));
+  const uint8_t *glyph = table + (index * (width * (height / 8)));
+  const uint8_t  shift = cursor_y & 7;
+  if (shift == 0) {
+    drawArea(cursor_x, cursor_y, width, height, glyph);
+  } else {
+    // y is not strip-aligned: shift each column down by `shift` pixels so the
+    // glyph can be vertically centred (e.g. a 24px glyph at y=4 on a 32px panel).
+    const uint8_t srcStrips = height / 8;
+    const int16_t baseStrip = cursor_y / 8;
+    for (uint8_t col = 0; col < width; col++) {
+      const int16_t x = cursor_x + col;
+      if (x < 0 || x >= OLED_WIDTH) {
+        continue;
+      }
+      uint32_t bits = 0;
+      for (uint8_t s = 0; s < srcStrips; s++) {
+        bits |= (uint32_t)glyph[(s * width) + col] << (8 * s);
+      }
+      bits <<= shift;
+      for (uint8_t s = 0; s <= srcStrips; s++) {
+        const int16_t destStrip = baseStrip + s;
+        if (destStrip < 0 || destStrip >= (OLED_HEIGHT / 8)) {
+          continue;
+        }
+        stripPointers[destStrip][x] = (bits >> (8 * s)) & 0xFF;
+      }
+    }
+  }
   cursor_x += width;
 }
 
