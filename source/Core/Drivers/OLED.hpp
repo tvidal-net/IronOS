@@ -74,6 +74,8 @@ enum class FontStyle {
   SMALL,
   LARGE,
   EXTRAS,
+  MEDIUM,      // 8x16 Terminus readout font (128x32 panels); falls back to LARGE elsewhere
+  EXTRA_LARGE, // 12x24 Terminus readout font (128x32 panels); falls back to LARGE elsewhere
 };
 
 class OLED {

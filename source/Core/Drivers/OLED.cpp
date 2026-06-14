@@ -166,27 +166,35 @@ void OLED::drawChar(const uint16_t charCode, const FontStyle fontStyle, const ui
   const uint8_t *currentFont;
   static uint8_t fontWidth, fontHeight;
   uint16_t       index;
-  switch (fontStyle) {
-  case FontStyle::EXTRAS:
+  if (fontStyle == FontStyle::EXTRAS) {
     currentFont = ExtraFontChars;
     index       = charCode;
     fontHeight  = 16;
     fontWidth   = 12;
-    break;
-  case FontStyle::SMALL:
-  case FontStyle::LARGE:
-  default:
-    currentFont = nullptr;
-    index       = 0;
+  } else {
     switch (fontStyle) {
     case FontStyle::SMALL:
-      fontHeight = 8;
-      fontWidth  = 6;
+      fontHeight  = 8;
+      fontWidth   = 6;
+      currentFont = FontSectionInfo.font06_start_ptr;
       break;
+#ifdef OLED_128x32
+    case FontStyle::MEDIUM:
+      fontHeight  = 16;
+      fontWidth   = 8;
+      currentFont = FontSectionInfo.font8x16_start_ptr;
+      break;
+    case FontStyle::EXTRA_LARGE:
+      fontHeight  = 24;
+      fontWidth   = 12;
+      currentFont = FontSectionInfo.font12x24_start_ptr;
+      break;
+#endif /* OLED_128x32 */
     case FontStyle::LARGE:
     default:
-      fontHeight = 16;
-      fontWidth  = 12;
+      fontHeight  = 16;
+      fontWidth   = 12;
+      currentFont = FontSectionInfo.font12_start_ptr;
       break;
     }
     if (charCode == '\x01' && cursor_y == 0) { // 0x01 is used as new line char
@@ -195,13 +203,36 @@ void OLED::drawChar(const uint16_t charCode, const FontStyle fontStyle, const ui
     } else if (charCode <= 0x01) {
       return;
     }
-
-    currentFont = fontStyle == FontStyle::SMALL ? FontSectionInfo.font06_start_ptr : FontSectionInfo.font12_start_ptr;
-    index       = charCode - 2;
-    break;
+    index = charCode - 2;
   }
   const uint8_t *charPointer = currentFont + ((fontWidth * (fontHeight / 8)) * index);
-  drawArea(cursor_x, cursor_y, fontWidth, fontHeight, charPointer);
+  const uint8_t  shift       = cursor_y & 7;
+  if (shift == 0) {
+    drawArea(cursor_x, cursor_y, fontWidth, fontHeight, charPointer);
+  } else {
+    // y is not strip-aligned: shift each column across strips so a glyph can be
+    // vertically centred (e.g. a 24px readout at y=4 on a 32px panel).
+    const uint8_t srcStrips = fontHeight / 8;
+    const int16_t baseStrip = cursor_y / 8;
+    for (uint8_t col = 0; col < fontWidth; col++) {
+      const int16_t x = cursor_x + col;
+      if (x < 0 || x >= OLED_WIDTH) {
+        continue;
+      }
+      uint32_t bits = 0;
+      for (uint8_t s = 0; s < srcStrips; s++) {
+        bits |= (uint32_t)charPointer[(s * fontWidth) + col] << (8 * s);
+      }
+      bits <<= shift;
+      for (uint8_t s = 0; s <= srcStrips; s++) {
+        const int16_t destStrip = baseStrip + s;
+        if (destStrip < 0 || destStrip >= (OLED_HEIGHT / 8)) {
+          continue;
+        }
+        stripPointers[destStrip][x] = (bits >> (8 * s)) & 0xFF;
+      }
+    }
+  }
   cursor_x += fontWidth;
 }
 
@@ -583,6 +614,9 @@ void OLED::printSymbolDeg(const FontStyle fontStyle) {
     OLED::drawSymbol(getSettingValue(SettingsOptions::TemperatureInF) ? 0 : 1);
     break;
   case FontStyle::LARGE:
+  case FontStyle::MEDIUM:
+  case FontStyle::EXTRA_LARGE:
+    // MEDIUM/EXTRA_LARGE share the large-font symbol table, so reuse its degree glyph.
     OLED::print(getSettingValue(SettingsOptions::TemperatureInF) ? LargeSymbolDegF : LargeSymbolDegC, fontStyle);
     break;
   case FontStyle::SMALL:
