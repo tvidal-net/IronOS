@@ -61,6 +61,16 @@ void prepareTranslations() {
   if (FontSectionInfo.font06_compressed_source != NULL) {
     blz_depack(FontSectionInfo.font06_compressed_source, (uint8_t *)FontSectionInfo.font06_start_ptr, FontSectionInfo.font06_decompressed_size);
   }
+
+#ifdef OLED_128x32
+  // Larger readout fonts (Terminus), only present on 128x32 builds
+  if (FontSectionInfo.font12x24_compressed_source != NULL) {
+    blz_depack(FontSectionInfo.font12x24_compressed_source, (uint8_t *)FontSectionInfo.font12x24_start_ptr, FontSectionInfo.font12x24_decompressed_size);
+  }
+  if (FontSectionInfo.font8x16_compressed_source != NULL) {
+    blz_depack(FontSectionInfo.font8x16_compressed_source, (uint8_t *)FontSectionInfo.font8x16_start_ptr, FontSectionInfo.font8x16_decompressed_size);
+  }
+#endif /* OLED_128x32 */
 }
 
 void settings_setLanguageSwitch(void) {
