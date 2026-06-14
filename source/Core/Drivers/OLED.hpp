@@ -130,6 +130,12 @@ public:
   static void drawImage(const uint8_t *buffer, uint8_t x, uint8_t width) { drawArea(x, 0, width, 16, buffer); }
   // Draws a number at the current cursor location
   static void printNumber(uint16_t number, uint8_t places, FontStyle fontStyle, bool noLeaderZeros = true);
+  // Spleen bitmap font readout API (128x32 only). ASCII-indexed; `large` selects the
+  // 12x24 font, otherwise the 8x16 font. Pass SPLEEN_DEGREE to render the degree sign.
+  static void drawSpleenChar(uint16_t c, bool large);
+  static void printSpleen(const char *str, bool large);
+  static void printSpleenNumber(uint16_t number, uint8_t places, bool large, bool noLeaderZeros = true);
+  static void printSpleenDeg(bool large); // degree sign followed by C/F per the unit setting
   // Clears the buffer
   static void clearScreen() { memset(stripPointers[0], 0, OLED_WIDTH * (OLED_HEIGHT / 8)); }
   // Draws the battery level symbol

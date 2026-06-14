@@ -7,6 +7,7 @@
 
 #include "Buttons.hpp"
 #include "Settings.h"
+#include "SpleenFont.h"
 #include "Translation.h"
 #include "cmsis_os.h"
 #include "configuration.h"
@@ -646,6 +647,67 @@ void OLED::printNumber(uint16_t number, uint8_t places, FontStyle fontStyle, boo
   }
   print(buffer, fontStyle);
 }
+
+// --- Spleen bitmap font readout API (128x32 only) -------------------------
+// These render directly from the ASCII-indexed Spleen tables (SpleenFont.h),
+// bypassing the per-language symbol map used by print(). Intended for numeric
+// readouts (temperature/status) on the taller panels.
+#if OLED_HEIGHT >= 32
+void OLED::drawSpleenChar(const uint16_t c, const bool large) {
+  const uint8_t *table = large ? spleen_12x24 : spleen_8x16;
+  const uint8_t  width  = large ? SPLEEN_12X24_WIDTH : SPLEEN_8X16_WIDTH;
+  const uint8_t  height = large ? SPLEEN_12X24_HEIGHT : SPLEEN_8X16_HEIGHT;
+  uint16_t       index;
+  if (c == SPLEEN_DEGREE) {
+    index = SPLEEN_DEGREE_INDEX;
+  } else if (c >= SPLEEN_FIRST_CHAR && c <= SPLEEN_LAST_CHAR) {
+    index = c - SPLEEN_FIRST_CHAR;
+  } else {
+    return; // glyph not in the table
+  }
+  drawArea(cursor_x, cursor_y, width, height, table + (index * (width * (height / 8))));
+  cursor_x += width;
+}
+
+void OLED::printSpleen(const char *str, const bool large) {
+  while (*str) {
+    drawSpleenChar((uint8_t)*str, large);
+    str++;
+  }
+}
+
+void OLED::printSpleenNumber(uint16_t number, uint8_t places, const bool large, const bool noLeaderZeros) {
+  char buffer[7] = {0};
+  if (places > 6) {
+    places = 6;
+  }
+  for (uint8_t p = 0; p < places; p++) {
+    buffer[places - 1 - p] = '0' + (number % 10);
+    number /= 10;
+  }
+  if (noLeaderZeros) {
+    // Blank leading zeros, but keep at least the final digit.
+    for (uint8_t p = 0; p + 1 < places; p++) {
+      if (buffer[p] == '0') {
+        buffer[p] = ' ';
+      } else {
+        break;
+      }
+    }
+  }
+  printSpleen(buffer, large);
+}
+
+void OLED::printSpleenDeg(const bool large) {
+  drawSpleenChar(SPLEEN_DEGREE, large);
+  drawSpleenChar(getSettingValue(SettingsOptions::TemperatureInF) ? 'F' : 'C', large);
+}
+#else
+void OLED::drawSpleenChar(const uint16_t, const bool) {}
+void OLED::printSpleen(const char *, const bool) {}
+void OLED::printSpleenNumber(uint16_t, uint8_t, const bool, const bool) {}
+void OLED::printSpleenDeg(const bool) {}
+#endif /* OLED_HEIGHT >= 32 */
 
 void OLED::debugNumber(int32_t val, FontStyle fontStyle) {
   if (abs(val) > 99999) {
