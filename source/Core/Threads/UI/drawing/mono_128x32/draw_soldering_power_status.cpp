@@ -10,7 +10,7 @@ void ui_draw_soldering_power_status(bool boost_mode_on) {
     OLED::setCursor(-1, 0);
   }
 
-  ui_draw_tip_temperature(true, FontStyle::LARGE);
+  ui_draw_tip_temperature_spleen(true, true); // 12x24 readout font (same width as LARGE, taller)
 
   if (boost_mode_on) { // Boost mode is on
     if (OLED::getRotation()) {
