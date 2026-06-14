@@ -11,7 +11,8 @@
 void ui_draw_warning_undervoltage(void);
 void ui_draw_power_source_icon(void);                            // Draw a single character wide power source icon
 void ui_draw_tip_temperature(bool symbol, const FontStyle font); // Draw tip temp, aware of conversions
-void ui_draw_tip_temperature_spleen(bool symbol, bool large);    // Draw tip temp in the Spleen 8x16/12x24 readout font
+void ui_draw_tip_temperature_spleen(bool symbol, bool large);    // Draw tip temp in the Spleen 8x16/12x24 readout font (left-aligned, exact width)
+uint8_t ui_tip_temperature_spleen_width(bool symbol, bool large); // Pixel width the above will occupy (for right-aligning)
 bool warnUser(const char *warning, const ButtonState buttons);   // Print a full screen warning to the user
 void ui_draw_cjc_sampling(const uint8_t num_dots);               // Draws the CJC info text and progress dots
 void ui_draw_debug_menu(const uint8_t item_number);              // Draws the debug menu state
