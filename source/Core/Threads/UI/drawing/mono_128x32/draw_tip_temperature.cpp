@@ -14,4 +14,12 @@ void ui_draw_tip_temperature(bool symbol, const FontStyle font) {
     OLED::printSymbolDeg(font == FontStyle::LARGE ? FontStyle::EXTRAS : font);
   }
 }
+
+// As above, but rendered in the Spleen readout font (large = 12x24, else 8x16).
+void ui_draw_tip_temperature_spleen(bool symbol, bool large) {
+  OLED::printSpleenNumber(getTipTemp(), 3, large);
+  if (symbol) {
+    OLED::printSpleenDeg(large);
+  }
+}
 #endif
