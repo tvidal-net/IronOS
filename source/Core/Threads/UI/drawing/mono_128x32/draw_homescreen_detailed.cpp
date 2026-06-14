@@ -41,7 +41,7 @@ void ui_draw_homescreen_detailed(TemperatureType_t tipTemp) {
 
     if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (tipTemp > 55) && (xTaskGetTickCount() % 1000 < 300))) {
       // Blink temp if setting enable and temp < 55° (OFF 300ms / ON 700ms)
-      OLED::setCursor(tempX, 8); // vertically centred (rows 8..32)
+      OLED::setCursor(tempX, 4); // vertically centred (4px above/below the 24px glyph)
       ui_draw_tip_temperature_spleen(true, true);
     }
 
