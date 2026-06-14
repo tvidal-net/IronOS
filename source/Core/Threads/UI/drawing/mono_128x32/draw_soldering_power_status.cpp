@@ -4,66 +4,44 @@
 #ifdef OLED_128x32
 
 void ui_draw_soldering_power_status(bool boost_mode_on) {
-  if (OLED::getRotation()) {
-    OLED::setCursor(50, 0);
-  } else {
-    OLED::setCursor(-1, 0);
-  }
+  // Big 12x24 tip temperature flush to one edge; wattage (top) and input
+  // voltage (bottom) in the 8x16 font flush to the other edge. The sleep
+  // countdown and power-source label are dropped to keep two larger rows.
+  // Sides flip with rotation.
+  (void)boost_mode_on;
+  const bool    rot     = OLED::getRotation();
+  const uint8_t statusW = 5 * 8; // "NN.NW" / "NN.NV" are 5 cells in the 8x16 font
+  const uint8_t tempW   = ui_tip_temperature_readout_width(true, FontStyle::EXTRA_LARGE);
+  const int16_t tempX   = rot ? (OLED_WIDTH - tempW) : 0;
+  const int16_t statusX = rot ? 0 : (OLED_WIDTH - statusW);
 
-  ui_draw_tip_temperature(true, FontStyle::LARGE);
+  // Big temperature, vertically centred (4px above/below the 24px glyph)
+  OLED::setCursor(tempX, 4);
+  ui_draw_tip_temperature_readout(true, FontStyle::EXTRA_LARGE);
 
-  if (boost_mode_on) { // Boost mode is on
-    if (OLED::getRotation()) {
-      OLED::setCursor(34, 0);
-    } else {
-      OLED::setCursor(50, 0);
-    }
-    OLED::print(LargeSymbolPlus, FontStyle::LARGE);
-  } else {
-#ifndef NO_SLEEP_MODE
-    if (getSettingValue(SettingsOptions::Sensitivity) && getSettingValue(SettingsOptions::SleepTime)) {
-      if (OLED::getRotation()) {
-        OLED::setCursor(32, 0);
-      } else {
-        OLED::setCursor(47, 0);
-      }
-      printCountdownUntilSleep(getSleepTimeout());
-    }
-#endif
-    if (OLED::getRotation()) {
-      OLED::setCursor(32, 8);
-    } else {
-      OLED::setCursor(47, 8);
-    }
-    OLED::print(PowerSourceNames[getPowerSourceNumber()], FontStyle::SMALL, 2);
-  }
-
-  if (OLED::getRotation()) {
-    OLED::setCursor(0, 0);
-  } else {
-    OLED::setCursor(67, 0);
-  }
-  // Print wattage
+  // Wattage (top row)
+  OLED::setCursor(statusX, 0);
   {
     uint32_t x10Watt = x10WattHistory.average();
     if (x10Watt > 999) {
-      // If we exceed 99.9W we drop the decimal place to keep it all fitting
-      OLED::print(SmallSymbolSpace, FontStyle::SMALL);
-      OLED::printNumber(x10WattHistory.average() / 10, 3, FontStyle::SMALL);
+      // Above 99.9W drop the decimal place to keep it to 5 cells
+      OLED::printNumber(x10Watt / 10, 3, FontStyle::MEDIUM);
     } else {
-      OLED::printNumber(x10WattHistory.average() / 10, 2, FontStyle::SMALL);
-      OLED::print(SmallSymbolDot, FontStyle::SMALL);
-      OLED::printNumber(x10WattHistory.average() % 10, 1, FontStyle::SMALL);
+      OLED::printNumber(x10Watt / 10, 2, FontStyle::MEDIUM);
+      OLED::print(LargeSymbolDot, FontStyle::MEDIUM);
+      OLED::printNumber(x10Watt % 10, 1, FontStyle::MEDIUM);
     }
-    OLED::print(SmallSymbolWatts, FontStyle::SMALL);
+    OLED::print(LargeSymbolWatts, FontStyle::MEDIUM);
   }
 
-  if (OLED::getRotation()) {
-    OLED::setCursor(0, 8);
-  } else {
-    OLED::setCursor(67, 8);
+  // Input voltage (bottom row)
+  OLED::setCursor(statusX, 16);
+  {
+    uint32_t Vlt = getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
+    OLED::printNumber(Vlt / 10, 2, FontStyle::MEDIUM);
+    OLED::print(LargeSymbolDot, FontStyle::MEDIUM);
+    OLED::printNumber(Vlt % 10, 1, FontStyle::MEDIUM);
+    OLED::print(LargeSymbolVolts, FontStyle::MEDIUM);
   }
-  printVoltage();
-  OLED::print(SmallSymbolVolts, FontStyle::SMALL);
 }
 #endif
