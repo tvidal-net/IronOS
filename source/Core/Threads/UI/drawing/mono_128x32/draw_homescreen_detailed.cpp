@@ -33,7 +33,7 @@ void ui_draw_homescreen_detailed(TemperatureType_t tipTemp) {
       // Blink temp if setting enable and temp < 55°
       // 1000 tick/sec
       // OFF 300ms ON 700ms
-      ui_draw_tip_temperature(true, FontStyle::LARGE); // draw in the temp
+      ui_draw_tip_temperature_spleen(true, true); // 12x24 readout font (same width as LARGE, taller)
     }
     if (OLED::getRotation()) {
       OLED::setCursor(6, 0);
