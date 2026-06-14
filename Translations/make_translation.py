@@ -111,6 +111,8 @@ def write_start(f: TextIO):
     )
     f.write("\n")
     f.write('#include "Translation.h"\n')
+    # configuration.h defines OLED_128x32, used to guard the larger readout fonts
+    f.write('#include "configuration.h"\n')
 
 
 def get_constants() -> List[Tuple[str, str]]:
@@ -406,6 +408,73 @@ def get_cjk_glyph(sym: str) -> Optional[bytes]:
                     b |= 0x01 << r
             bs.append(b)
     return bytes(bs)
+
+
+# --- Terminus readout fonts (8x16 / 12x24) for 128x32 panels ----------------
+# (path, cell width, cell height, font ascent)
+TERMINUS_FONTS = {
+    "8x16": ("terminus/ter-u16n.bdf", 8, 16, 12),
+    "12x24": ("terminus/ter-u24n.bdf", 12, 24, 19),
+}
+_terminus_cache: Dict[str, Font] = {}
+
+
+def _terminus_font(size: str) -> Font:
+    path = TERMINUS_FONTS[size][0]
+    if path not in _terminus_cache:
+        with open(os.path.join(HERE, path), "rb") as fh:
+            _terminus_cache[path] = bdfreader.read_bdf(fh)
+    return _terminus_cache[path]
+
+
+def get_terminus_bytes(sym: str, size: str) -> bytes:
+    """Render `sym` from a Terminus BDF into the IronOS column-major strip
+    format. Missing glyphs (or non-single-char symbols) render as blank, which
+    compresses to almost nothing."""
+    _, dst_w, dst_h, ascent = TERMINUS_FONTS[size]
+    blank = bytes(dst_w * (dst_h // 8))
+    if len(sym) != 1:
+        return blank
+    try:
+        glyph: Glyph = _terminus_font(size)[ord(sym)]
+    except KeyError:
+        return blank
+    data = glyph.data
+    src_left, src_bottom, src_w, src_h = glyph.get_bounding_box()
+
+    def get_cell(x: int, y: int) -> bool:
+        adj_x = x - src_left
+        if adj_x < 0 or adj_x >= src_w:
+            return False
+        adj_y = y - (ascent - src_h - src_bottom)
+        if adj_y < 0 or adj_y >= src_h:
+            return False
+        return bool(data[src_h - adj_y - 1] & (1 << (src_w - adj_x - 1)))
+
+    bs = bytearray()
+    for block in range(dst_h // 8):
+        for c in range(dst_w):
+            b = 0
+            for r in range(8):
+                if get_cell(c, r + 8 * block):
+                    b |= 0x01 << r
+            bs.append(b)
+    return bytes(bs)
+
+
+def make_terminus_table_cpp(name: str, size: str, sym_list: List[str]) -> str:
+    out = f"const uint8_t {name}[] = {{\n"
+    for i, sym in enumerate(sym_list):
+        out += f"{bytes_to_c_hex(get_terminus_bytes(sym, size))}//0x{i + 2:X} -> {sym}\n"
+    out += f"}}; // {name}\n"
+    return out
+
+
+def terminus_block_bytes(size: str, sym_list: List[str]) -> bytes:
+    out = bytearray()
+    for sym in sym_list:
+        out.extend(get_terminus_bytes(sym, size))
+    return bytes(out)
 
 
 def get_bytes_from_font_index(index: int) -> bytes:
@@ -771,6 +840,11 @@ def render_font_block(data: LanguageData, f: TextIO, compress_font: bool = False
             large_font_symbol_conversion_table,
         )
         f.write(font_table_text)
+        # Terminus readout fonts (only compiled in on 128x32 panels)
+        f.write("#ifdef OLED_128x32\n")
+        f.write(make_terminus_table_cpp("USER_FONT_12x24", "12x24", data.large_text_symbols))
+        f.write(make_terminus_table_cpp("USER_FONT_8x16", "8x16", data.large_text_symbols))
+        f.write("#endif /* OLED_128x32 */\n")
         f.write(
             "const FontSection FontSectionInfo = {\n"
             "    .font12_start_ptr = USER_FONT_12,\n"
@@ -779,6 +853,17 @@ def render_font_block(data: LanguageData, f: TextIO, compress_font: bool = False
             "    .font06_decompressed_size = 0,\n"
             "    .font12_compressed_source = 0,\n"
             "    .font06_compressed_source = 0,\n"
+            "#ifdef OLED_128x32\n"
+            "    .font12x24_start_ptr = USER_FONT_12x24,\n"
+            "    .font8x16_start_ptr = USER_FONT_8x16,\n"
+            "#else\n"
+            "    .font12x24_start_ptr = 0,\n"
+            "    .font8x16_start_ptr = 0,\n"
+            "#endif /* OLED_128x32 */\n"
+            "    .font12x24_decompressed_size = 0,\n"
+            "    .font8x16_decompressed_size = 0,\n"
+            "    .font12x24_compressed_source = 0,\n"
+            "    .font8x16_compressed_source = 0,\n"
             "};\n"
         )
     else:
@@ -801,6 +886,24 @@ def render_font_block(data: LanguageData, f: TextIO, compress_font: bool = False
 
         write_bytes_as_c_array(f, "font_06x08_brieflz", font06_compressed)
 
+        # Terminus readout fonts (only compiled in on 128x32 panels)
+        f.write("#ifdef OLED_128x32\n")
+        font12x24_uncompressed = terminus_block_bytes("12x24", data.large_text_symbols)
+        font12x24_compressed = brieflz.compress(font12x24_uncompressed)
+        logging.info(
+            f"Font table 12x24 compressed from {len(font12x24_uncompressed)} to {len(font12x24_compressed)} bytes"
+        )
+        write_bytes_as_c_array(f, "font_12x24_brieflz", font12x24_compressed)
+        font8x16_uncompressed = terminus_block_bytes("8x16", data.large_text_symbols)
+        font8x16_compressed = brieflz.compress(font8x16_uncompressed)
+        logging.info(
+            f"Font table 8x16 compressed from {len(font8x16_uncompressed)} to {len(font8x16_compressed)} bytes"
+        )
+        write_bytes_as_c_array(f, "font_8x16_brieflz", font8x16_compressed)
+        f.write(f"static uint8_t font12x24_out_buffer[{len(font12x24_uncompressed)}];\n")
+        f.write(f"static uint8_t font8x16_out_buffer[{len(font8x16_uncompressed)}];\n")
+        f.write("#endif /* OLED_128x32 */\n")
+
         f.write(
             f"static uint8_t font12_out_buffer[{len(font12_uncompressed)}];\n"
             f"static uint8_t font06_out_buffer[{len(font06_uncompressed)}];\n"
@@ -811,6 +914,21 @@ def render_font_block(data: LanguageData, f: TextIO, compress_font: bool = False
             f"    .font06_decompressed_size = {len(font06_uncompressed)},\n"
             "    .font12_compressed_source = font_12x16_brieflz,\n"
             "    .font06_compressed_source = font_06x08_brieflz,\n"
+            "#ifdef OLED_128x32\n"
+            "    .font12x24_start_ptr = font12x24_out_buffer,\n"
+            "    .font8x16_start_ptr = font8x16_out_buffer,\n"
+            f"    .font12x24_decompressed_size = {len(font12x24_uncompressed)},\n"
+            f"    .font8x16_decompressed_size = {len(font8x16_uncompressed)},\n"
+            "    .font12x24_compressed_source = font_12x24_brieflz,\n"
+            "    .font8x16_compressed_source = font_8x16_brieflz,\n"
+            "#else\n"
+            "    .font12x24_start_ptr = 0,\n"
+            "    .font8x16_start_ptr = 0,\n"
+            "    .font12x24_decompressed_size = 0,\n"
+            "    .font8x16_decompressed_size = 0,\n"
+            "    .font12x24_compressed_source = 0,\n"
+            "    .font8x16_compressed_source = 0,\n"
+            "#endif /* OLED_128x32 */\n"
             "};\n"
         )
 
@@ -922,7 +1040,9 @@ def write_languages(
         lang.get("languageLocalName", lang["languageCode"]) for lang in data.langs
     ]
 
-    f.write('#include "Translation_multi.h"')
+    f.write('#include "Translation_multi.h"\n')
+    # configuration.h defines OLED_128x32, used to guard the larger readout fonts
+    f.write('#include "configuration.h"')
 
     f.write(f"\n// ---- {lang_names} ----\n\n")
 

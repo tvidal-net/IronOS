@@ -185,6 +185,13 @@ struct FontSection {
   uint16_t       font06_decompressed_size;
   const uint8_t *font12_compressed_source; // Pointer to compressed data or null
   const uint8_t *font06_compressed_source; // Pointer to compressed data or null
+  // Larger readout fonts (Terminus) used on 128x32 panels; null on smaller displays.
+  const uint8_t *font12x24_start_ptr;
+  const uint8_t *font8x16_start_ptr;
+  uint16_t       font12x24_decompressed_size;
+  uint16_t       font8x16_decompressed_size;
+  const uint8_t *font12x24_compressed_source;
+  const uint8_t *font8x16_compressed_source;
 };
 
 extern const FontSection FontSectionInfo;
