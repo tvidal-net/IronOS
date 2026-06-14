@@ -1,3 +1,4 @@
+#include "SpleenFont.h"
 #include "ui_drawing.hpp"
 #ifdef OLED_128x32
 
@@ -29,29 +30,33 @@ void ui_draw_homescreen_detailed(TemperatureType_t tipTemp) {
     }
     OLED::print(SmallSymbolVolts, FontStyle::SMALL);
   } else {
+    // Tip temperature in the big 12x24 font flush to one edge, with the set
+    // temperature and input voltage stacked in the 8x16 font flush to the
+    // other edge (filling the full panel height). Sides flip with rotation.
+    const bool    rot     = OLED::getRotation();
+    const uint8_t statusW = 5 * SPLEEN_8X16_WIDTH;            // "NNN°C" / "NN.NV" are both 5 cells
+    const uint8_t tempW   = ui_tip_temperature_spleen_width(true, true);
+    const int16_t tempX   = rot ? (OLED_WIDTH - tempW) : 0;   // temp flush to its edge
+    const int16_t statusX = rot ? 0 : (OLED_WIDTH - statusW); // status flush to the opposite edge
+
     if (!(getSettingValue(SettingsOptions::CoolingTempBlink) && (tipTemp > 55) && (xTaskGetTickCount() % 1000 < 300))) {
-      // Blink temp if setting enable and temp < 55°
-      // 1000 tick/sec
-      // OFF 300ms ON 700ms
-      ui_draw_tip_temperature_spleen(true, true); // 12x24 readout font (same width as LARGE, taller)
+      // Blink temp if setting enable and temp < 55° (OFF 300ms / ON 700ms)
+      OLED::setCursor(tempX, 8); // vertically centred (rows 8..32)
+      ui_draw_tip_temperature_spleen(true, true);
     }
-    if (OLED::getRotation()) {
-      OLED::setCursor(6, 0);
-    } else {
-      OLED::setCursor(73, 0); // top right
-    }
-    // draw set temp
-    OLED::printNumber(getSettingValue(SettingsOptions::SolderingTemp), 3, FontStyle::SMALL);
 
-    OLED::printSymbolDeg(FontStyle::SMALL);
+    // Set temperature (top row)
+    OLED::setCursor(statusX, 0);
+    OLED::printSpleenNumber(getSettingValue(SettingsOptions::SolderingTemp), 3, false);
+    OLED::printSpleenDeg(false);
 
-    if (OLED::getRotation()) {
-      OLED::setCursor(0, 8);
-    } else {
-      OLED::setCursor(67, 8); // bottom right
-    }
-    printVoltage(); // draw voltage then symbol (v)
-    OLED::print(SmallSymbolVolts, FontStyle::SMALL);
+    // Input voltage (bottom row)
+    OLED::setCursor(statusX, 16);
+    const uint32_t Vlt = getInputVoltageX10(getSettingValue(SettingsOptions::VoltageDiv), 0);
+    OLED::printSpleenNumber(Vlt / 10, 2, false);
+    OLED::printSpleen(".", false);
+    OLED::printSpleenNumber(Vlt % 10, 1, false);
+    OLED::printSpleen("V", false);
   }
 }
 #endif
