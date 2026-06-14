@@ -414,7 +414,7 @@ def get_cjk_glyph(sym: str) -> Optional[bytes]:
 # (path, cell width, cell height, font ascent)
 TERMINUS_FONTS = {
     "8x16": ("terminus/ter-u16n.bdf", 8, 16, 12),
-    "12x24": ("terminus/ter-u24n.bdf", 12, 24, 19),
+    "12x24": ("terminus/ter-u24b.bdf", 12, 24, 19),
 }
 _terminus_cache: Dict[str, Font] = {}
 
